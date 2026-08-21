@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parking Manager</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <style>
+        body { font-family: Arial; background: #f4f4f9; padding: 20px; }
+        .box { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        input, select, button { width: 100%; padding: 10px; margin: 5px 0 15px; border-radius: 5px; border: 1px solid #ccc; box-sizing: border-box; }
+        button { background: #007bff; color: white; border: none; cursor: pointer; font-weight: bold; }
+        .vehicle-card { padding: 15px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #ddd; }
+        .alert-red { background-color: #ffcccc; border: 2px solid red; } /* Overtime */
+        .alert-yellow { background-color: #fff3cd; border: 2px solid orange; } /* 15 mins left */
+        .alert-normal { background-color: #d4edda; } /* Safe */
+        .header { display: flex; justify-content: space-between; align-items: center; }
+    </style>
+</head>
+<body>
+
+    <div class="header box">
+        <h2>Manager Dashboard</h2>
+        <button style="width: 100px; background: red;" onclick="auth.signOut().then(()=>window.location.href='index.html')">Logout</button>
+    </div>
+
+    <!-- Entry Form -->
+    <div class="box">
+        <h3>New Vehicle Entry</h3>
+        <input type="text" id="vNo" placeholder="Vehicle No (RJ14 XX 1234)">
+        <select id="vType"><option value="Car">Car</option><option value="Bike">Bike</option></select>
+        <input type="number" id="vMobile" placeholder="Customer Mobile">
+        <input type="number" id="vHours" placeholder="Park for how many hours?">
+        <button onclick="parkVehicle()">Park Vehicle</button>
+    </div>
+
+    <!-- Live Parking & Alerts -->
+    <div class="box">
+        <h3>Active Vehicles & Time Alerts</h3>
+        <div id="liveParking">Loading...</div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDVncgVZCzOPHWPFRbIBYACTcOAUImKqmM",
+            authDomain: "parking-108d1.firebaseapp.com",
+            projectId: "parking-108d1",
+            storageBucket: "parking-108d1.firebasestorage.app",
+            messagingSenderId: "237479413570",
+            appId: "1:237479413570:web:6806405b54bd3218feeadb"
+        };
+        firebase.initializeApp(firebaseConfig); const auth = firebase.auth(); const db = firebase.firestore();
+
+        // Check Login
+        auth.onAuthStateChanged((user) => { if (!user) window.location.href = "index.html"; });
+
+        // Park Vehicle
+        function parkVehicle() {
+            let no = document.getElementById('vNo').value.toUpperCase(); let type = document.getElementById('vType').value;
+            let mobile = document.getElementById('vMobile').value; let hours = parseFloat(document.getElementById('vHours').value);
+            
+            if(!no || !mobile || !hours) return alert("Fill all details!");
+            
+            let now = new Date().getTime();
+            let exitTime = now + (hours * 60 * 60 * 1000); // Calculate Overtime
+
+            db.collection("parking_active_vehicles").add({
+                vNo: no, type: type, mobile: mobile, startTime: now, exitTime: exitTime
+            }).then(() => {
+                alert("Vehicle Parked!");
+                document.getElementById('vNo').value = ''; document.getElementById('vMobile').value = ''; document.getElementById('vHours').value = '';
+            });
+        }
+
+        // Load Vehicles & Timer Logic
+        setInterval(loadVehicles, 30000); // Auto refresh every 30 seconds
+        loadVehicles();
+
+        function loadVehicles() {
+            db.collection("parking_active_vehicles").onSnapshot((snap) => {
+                let html = ""; let now = new Date().getTime();
+                snap.forEach((doc) => {
+                    let d = doc.data();
+                    let timeLeftMins = Math.floor((d.exitTime - now) / 60000);
+                    
+                    let alertClass = "alert-normal"; let alertText = `${timeLeftMins} mins left`;
+                    if (timeLeftMins <= 0) { alertClass = "alert-red"; alertText = "OVERTIME! (Red Alert)"; }
+                    else if (timeLeftMins <= 15) { alertClass = "alert-yellow"; alertText = "Ending Soon! (Yellow Alert)"; }
+
+                    html += `
+                    <div class="vehicle-card ${alertClass}">
+                        <strong>${d.vNo} (${d.type})</strong><br>
+                        Mobile: ${d.mobile} | Status: <b>${alertText}</b><br>
+                        <button style="margin-top:10px; background: #28a745; width: auto;" onclick="checkout('${doc.id}', '${d.vNo}')">Checkout</button>
+                    </div>`;
+                });
+                document.getElementById('liveParking').innerHTML = html || "Parking is empty.";
+            });
+        }
+
+        // Checkout
+        function checkout(id, vNo) {
+            if(confirm("Checkout " + vNo + "?")) {
+                db.collection("parking_active_vehicles").doc(id).delete();
+            }
+        }
+    </script>
+</body>
+</html>
+
