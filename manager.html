@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Parking Manager</title>
+    <title>Smart Parking Manager Pro</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
@@ -12,11 +12,16 @@
         .box { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
         input, select, button { width: 100%; padding: 10px; margin: 5px 0 15px; border-radius: 5px; border: 1px solid #ccc; box-sizing: border-box; }
         button { background: #007bff; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background: #0056b3; }
         .vehicle-card { padding: 15px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #ddd; }
-        .alert-red { background-color: #ffcccc; border: 2px solid red; } /* Overtime */
-        .alert-yellow { background-color: #fff3cd; border: 2px solid orange; } /* 15 mins left */
-        .alert-normal { background-color: #d4edda; } /* Safe */
+        .alert-red { background-color: #ffcccc; border: 2px solid red; }
+        .alert-yellow { background-color: #fff3cd; border: 2px solid orange; }
+        .alert-normal { background-color: #d4edda; }
         .header { display: flex; justify-content: space-between; align-items: center; }
+        .search-box { background: #e9ecef; }
+        .grid-4 { display: flex; gap: 8px; }
+        .grid-4 > div { flex: 1; }
+        label { font-size: 11px; color: #555; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -26,20 +31,59 @@
         <button style="width: 100px; background: red;" onclick="auth.signOut().then(()=>window.location.href='index.html')">Logout</button>
     </div>
 
-    <!-- Entry Form -->
+    <!-- 1. New Vehicle Entry (Hours, Days, Months, Years System) -->
     <div class="box">
-        <h3>New Vehicle Entry</h3>
-        <input type="text" id="vNo" placeholder="Vehicle No (RJ14 XX 1234)">
-        <select id="vType"><option value="Car">Car</option><option value="Bike">Bike</option></select>
-        <input type="number" id="vMobile" placeholder="Customer Mobile">
-        <input type="number" id="vHours" placeholder="Park for how many hours?">
+        <h3>New Vehicle Entry (Advanced Time)</h3>
+        <input type="text" id="vNo" placeholder="Vehicle No (e.g. RJ14XX1234)">
+        <select id="vType">
+            <option value="Car">Car</option>
+            <option value="Bike">Bike</option>
+        </select>
+        <input type="number" id="vMobile" placeholder="Customer Mobile Number">
+        
+        <div class="grid-4">
+            <div>
+                <label>Ghante (Hours)</label>
+                <input type="number" id="vHours" value="0">
+            </div>
+            <div>
+                <label>Din (Days)</label>
+                <input type="number" id="vDays" value="0">
+            </div>
+            <div>
+                <label>Mahine (Months)</label>
+                <input type="number" id="vMonths" value="0">
+            </div>
+            <div>
+                <label>Saal (Years)</label>
+                <input type="number" id="vYears" value="0">
+            </div>
+        </div>
+
         <button onclick="parkVehicle()">Park Vehicle</button>
     </div>
 
-    <!-- Live Parking & Alerts -->
+    <!-- 2. Subscription / Monthly Pass Add Karein -->
+    <div class="box" style="background: #e8f4f8;">
+        <h3>Add Monthly Subscription Member</h3>
+        <input type="text" id="subName" placeholder="Member Name">
+        <input type="text" id="subVNo" placeholder="Vehicle Number">
+        <input type="number" id="subMobile" placeholder="Mobile Number">
+        <input type="date" id="subExpiry">
+        <button style="background: #28a745;" onclick="addSubscription()">Save Subscription Pass</button>
+    </div>
+
+    <!-- 3. Live Parking & Search Option -->
     <div class="box">
-        <h3>Active Vehicles & Time Alerts</h3>
-        <div id="liveParking">Loading...</div>
+        <h3>Active Vehicles & Search</h3>
+        <input type="text" id="searchBar" class="search-box" placeholder="🔍 Gadi Number ya Mobile se search karein..." onkeyup="filterVehicles()">
+        <div id="liveParking" style="margin-top: 15px;">Loading...</div>
+    </div>
+
+    <!-- 4. Subscription List View -->
+    <div class="box">
+        <h3>Active Monthly Memberships</h3>
+        <div id="subList">Loading members...</div>
     </div>
 
     <script>
@@ -53,60 +97,151 @@
         };
         firebase.initializeApp(firebaseConfig); const auth = firebase.auth(); const db = firebase.firestore();
 
-        // Check Login
         auth.onAuthStateChanged((user) => { if (!user) window.location.href = "index.html"; });
 
-        // Park Vehicle
+        // Park Vehicle with Hours, Days, Months, Years support
         function parkVehicle() {
-            let no = document.getElementById('vNo').value.toUpperCase(); let type = document.getElementById('vType').value;
-            let mobile = document.getElementById('vMobile').value; let hours = parseFloat(document.getElementById('vHours').value);
+            let no = document.getElementById('vNo').value.toUpperCase().trim();
+            let type = document.getElementById('vType').value;
+            let mobile = document.getElementById('vMobile').value;
             
-            if(!no || !mobile || !hours) return alert("Fill all details!");
+            let hours = parseFloat(document.getElementById('vHours').value) || 0;
+            let days = parseFloat(document.getElementById('vDays').value) || 0;
+            let months = parseFloat(document.getElementById('vMonths').value) || 0;
+            let years = parseFloat(document.getElementById('vYears').value) || 0;
             
-            let now = new Date().getTime();
-            let exitTime = now + (hours * 60 * 60 * 1000); // Calculate Overtime
+            if(!no || !mobile) return alert("Gadi ka number aur mobile number bharna zaroori hai!");
+            if(hours === 0 && days === 0 && months === 0 && years === 0) return alert("Kam se kam koi ek time period toh select karein!");
+            
+            let now = new Date();
+            // Calculate exact future exit time considering months and years accurately
+            let exitDate = new Date(now.getTime());
+            exitDate.setFullYear(exitDate.getFullYear() + years);
+            exitDate.setMonth(exitDate.getMonth() + months);
+            exitDate.setDate(exitDate.getDate() + days);
+            exitDate.setHours(exitDate.getHours() + hours);
+
+            let exitTimeMillis = exitDate.getTime();
 
             db.collection("parking_active_vehicles").add({
-                vNo: no, type: type, mobile: mobile, startTime: now, exitTime: exitTime
+                vNo: no, type: type, mobile: mobile, startTime: now.getTime(), exitTime: exitTimeMillis
             }).then(() => {
-                alert("Vehicle Parked!");
-                document.getElementById('vNo').value = ''; document.getElementById('vMobile').value = ''; document.getElementById('vHours').value = '';
+                alert("Vehicle Parked Successfully!");
+                document.getElementById('vNo').value = ''; 
+                document.getElementById('vMobile').value = ''; 
+                document.getElementById('vHours').value = '0';
+                document.getElementById('vDays').value = '0';
+                document.getElementById('vMonths').value = '0';
+                document.getElementById('vYears').value = '0';
             });
         }
 
-        // Load Vehicles & Timer Logic
-        setInterval(loadVehicles, 30000); // Auto refresh every 30 seconds
-        loadVehicles();
+        // Add Subscription Member
+        function addSubscription() {
+            let name = document.getElementById('subName').value;
+            let vNo = document.getElementById('subVNo').value.toUpperCase().trim();
+            let mobile = document.getElementById('subMobile').value;
+            let expiry = document.getElementById('subExpiry').value;
 
-        function loadVehicles() {
-            db.collection("parking_active_vehicles").onSnapshot((snap) => {
-                let html = ""; let now = new Date().getTime();
-                snap.forEach((doc) => {
-                    let d = doc.data();
-                    let timeLeftMins = Math.floor((d.exitTime - now) / 60000);
+            if(!name || !vNo || !mobile || !expiry) return alert("Subscription ki sabhi details bharein!");
+
+            db.collection("parking_subscriptions").add({
+                name: name, vNo: vNo, mobile: mobile, expiryDate: expiry
+            }).then(() => {
+                alert("Monthly Pass Created Successfully!");
+                document.getElementById('subName').value = '';
+                document.getElementById('subVNo').value = '';
+                document.getElementById('subMobile').value = '';
+                document.getElementById('subExpiry').value = '';
+            });
+        }
+
+        let allVehiclesData = [];
+        
+        db.collection("parking_active_vehicles").onSnapshot((snap) => {
+            allVehiclesData = [];
+            snap.forEach((doc) => {
+                allVehiclesData.push({ id: doc.id, ...doc.data() });
+            });
+            displayVehicles(allVehiclesData);
+        });
+
+        // Display Vehicles with Time Left Calculation
+        function displayVehicles(dataArray) {
+            let html = ""; let now = new Date().getTime();
+            dataArray.forEach((d) => {
+                let diffMins = Math.floor((d.exitTime - now) / 60000);
+                let alertClass = "alert-normal"; 
+                let timeText = "";
+
+                if (diffMins <= 0) {
+                    alertClass = "alert-red";
+                    timeText = "OVERTIME! (Red Alert)";
+                } else {
+                    let calcDays = Math.floor(diffMins / 1440);
+                    let calcHours = Math.floor((diffMins % 1440) / 60);
                     
-                    let alertClass = "alert-normal"; let alertText = `${timeLeftMins} mins left`;
-                    if (timeLeftMins <= 0) { alertClass = "alert-red"; alertText = "OVERTIME! (Red Alert)"; }
-                    else if (timeLeftMins <= 15) { alertClass = "alert-yellow"; alertText = "Ending Soon! (Yellow Alert)"; }
+                    if(calcDays > 365) {
+                        let calcYears = Math.floor(calcDays / 365);
+                        let remDays = calcDays % 365;
+                        timeText = `${calcYears} years ${remDays} days left`;
+                    } else if(calcDays > 30) {
+                        let calcMonths = Math.floor(calcDays / 30);
+                        let remDays = calcDays % 30;
+                        timeText = `${calcMonths} months ${remDays} days left`;
+                    } else if(calcDays > 0) {
+                        timeText = `${calcDays} days ${calcHours} hours left`;
+                    } else {
+                        if(calcHours <= 1) alertClass = "alert-yellow";
+                        timeText = `${calcHours} hours left`;
+                    }
+                }
 
-                    html += `
-                    <div class="vehicle-card ${alertClass}">
-                        <strong>${d.vNo} (${d.type})</strong><br>
-                        Mobile: ${d.mobile} | Status: <b>${alertText}</b><br>
-                        <button style="margin-top:10px; background: #28a745; width: auto;" onclick="checkout('${doc.id}', '${d.vNo}')">Checkout</button>
-                    </div>`;
-                });
-                document.getElementById('liveParking').innerHTML = html || "Parking is empty.";
+                html += `
+                <div class="vehicle-card ${alertClass}">
+                    <strong>🚗 ${d.vNo} (${d.type})</strong><br>
+                    Mobile: ${d.mobile} | Status: <b>${timeText}</b><br>
+                    <button style="margin-top:10px; background: #28a745; width: auto;" onclick="checkout('${d.id}', '${d.vNo}')">Checkout</button>
+                </div>`;
             });
+            document.getElementById('liveParking').innerHTML = html || "Koi gadi parking me nahi hai.";
         }
 
-        // Checkout
+        // Search Filter Logic
+        function filterVehicles() {
+            let query = document.getElementById('searchBar').value.toUpperCase();
+            let filtered = allVehiclesData.filter(item => 
+                item.vNo.includes(query) || item.mobile.includes(query)
+            );
+            displayVehicles(filtered);
+        }
+
+        // Load Subscriptions List
+        db.collection("parking_subscriptions").onSnapshot((snap) => {
+            let html = "";
+            snap.forEach((doc) => {
+                let d = doc.data();
+                html += `
+                <div class="vehicle-card" style="background: #fff;">
+                    <strong>👤 ${d.name} (${d.vNo})</strong><br>
+                    Mobile: ${d.mobile} | Expiry Date: <b style="color:red;">${d.expiryDate}</b><br>
+                    <button style="margin-top:10px; background: #dc3545; width: auto;" onclick="removeSub('${doc.id}')">Delete Pass</button>
+                </div>`;
+            });
+            document.getElementById('subList').innerHTML = html || "Koi active monthly pass nahi hai.";
+        });
+
         function checkout(id, vNo) {
             if(confirm("Checkout " + vNo + "?")) {
                 db.collection("parking_active_vehicles").doc(id).delete();
             }
         }
+
+        function removeSub(id) {
+            if(confirm("Kya aap ye membership delete karna chahte hain?")) {
+                db.collection("parking_subscriptions").doc(id).delete();
+            }
+        }
     </script>
 </body>
 </html>
-
