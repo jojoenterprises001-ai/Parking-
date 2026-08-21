@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parking System - Login</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #2c3e50; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .box { background: #34495e; padding: 30px; border-radius: 10px; width: 320px; text-align: center; }
+        input { width: 100%; padding: 10px; margin: 10px 0; border: none; border-radius: 5px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background: #27ae60; border: none; color: white; font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .switch-text { margin-top: 15px; font-size: 14px; cursor: pointer; color: #3498db; }
+    </style>
+</head>
+<body>
+
+    <div class="box" id="loginBox">
+        <h2>Smart Parking Login</h2>
+        <input type="email" id="loginEmail" placeholder="Email ID">
+        <input type="password" id="loginPassword" placeholder="Password">
+        <button onclick="loginUser()">Login</button>
+        <p class="switch-text" onclick="toggleForms()">Naya Staff? Yahan Apply Karein</p>
+        <div id="loginMessage"></div>
+    </div>
+
+    <div class="box" id="signupBox" style="display: none;">
+        <h2>Staff Registration</h2>
+        <input type="text" id="regName" placeholder="Full Name">
+        <input type="number" id="regMobile" placeholder="Mobile Number">
+        <input type="email" id="regEmail" placeholder="Email ID">
+        <input type="password" id="regPassword" placeholder="Create Password">
+        <button onclick="registerStaff()">Send Request</button>
+        <p class="switch-text" onclick="toggleForms()">Pehle se ID hai? Login Karein</p>
+        <div id="signupMessage"></div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDVncgVZCzOPHWPFRbIBYACTcOAUImKqmM",
+            authDomain: "parking-108d1.firebaseapp.com",
+            projectId: "parking-108d1",
+            storageBucket: "parking-108d1.firebasestorage.app",
+            messagingSenderId: "237479413570",
+            appId: "1:237479413570:web:6806405b54bd3218feeadb"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth(); const db = firebase.firestore();
+
+        function toggleForms() {
+            let l = document.getElementById('loginBox'); let s = document.getElementById('signupBox');
+            if (l.style.display === "none") { l.style.display = "block"; s.style.display = "none"; } 
+            else { l.style.display = "none"; s.style.display = "block"; }
+        }
+
+        function registerStaff() {
+            let email = document.getElementById('regEmail').value; let password = document.getElementById('regPassword').value;
+            let name = document.getElementById('regName').value; let mobile = document.getElementById('regMobile').value;
+            auth.createUserWithEmailAndPassword(email, password).then((userCred) => {
+                db.collection("parking_staff_requests").doc(userCred.user.uid).set({ name: name, mobile: mobile, email: email, status: "Pending" })
+                .then(() => { alert("Request Sent!"); auth.signOut(); toggleForms(); });
+            }).catch((err) => alert(err.message));
+        }
+
+        function loginUser() {
+            let email = document.getElementById('loginEmail').value; let password = document.getElementById('loginPassword').value;
+            auth.signInWithEmailAndPassword(email, password).then((userCred) => {
+                if(email === "admin@parking.com") { window.location.href = "admin.html"; return; }
+                db.collection("parking_staff_requests").doc(userCred.user.uid).get().then((doc) => {
+                    if (doc.exists && doc.data().status === "Approved") { window.location.href = "manager.html"; } 
+                    else { alert("Abhi Admin ne Approve nahi kiya hai!"); auth.signOut(); }
+                });
+            }).catch(() => alert("Wrong Email or Password"));
+        }
+    </script>
+</body>
+</html>
+
