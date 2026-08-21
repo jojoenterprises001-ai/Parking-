@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Admin</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <style>
+        body { font-family: Arial; background: #ecf0f1; padding: 20px; }
+        .card { background: white; padding: 20px; border-radius: 8px; margin-top: 20px; }
+        table { width: 100%; border-collapse: collapse; } th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; }
+        button { padding: 5px 10px; cursor: pointer; color: white; border: none; border-radius: 4px; }
+        .btn-app { background: green; } .btn-rej { background: red; }
+    </style>
+</head>
+<body>
+    <h2>Super Admin Dashboard <button class="btn-rej" onclick="auth.signOut().then(()=>window.location.href='index.html')">Logout</button></h2>
+    <div class="card">
+        <h3>Staff Approval Requests</h3>
+        <table>
+            <thead><tr><th>Name</th><th>Mobile</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody id="staffTable"></tbody>
+        </table>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDVncgVZCzOPHWPFRbIBYACTcOAUImKqmM",
+            authDomain: "parking-108d1.firebaseapp.com",
+            projectId: "parking-108d1",
+            storageBucket: "parking-108d1.firebasestorage.app",
+            messagingSenderId: "237479413570",
+            appId: "1:237479413570:web:6806405b54bd3218feeadb"
+        };
+        firebase.initializeApp(firebaseConfig); const auth = firebase.auth(); const db = firebase.firestore();
+
+        auth.onAuthStateChanged((user) => {
+            if (!user || user.email !== "admin@parking.com") { window.location.href = "index.html"; }
+            else { loadStaff(); }
+        });
+
+        function loadStaff() {
+            db.collection("parking_staff_requests").onSnapshot((snap) => {
+                let html = "";
+                snap.forEach((doc) => {
+                    let d = doc.data();
+                    html += `<tr><td>${d.name}</td><td>${d.mobile}</td><td>${d.status}</td>
+                    <td>${d.status === 'Pending' ? `<button class="btn-app" onclick="upd('${doc.id}', 'Approved')">Approve</button>` : `<button class="btn-rej" onclick="del('${doc.id}')">Remove</button>`}</td></tr>`;
+                });
+                document.getElementById('staffTable').innerHTML = html;
+            });
+        }
+        function upd(id, status) { db.collection("parking_staff_requests").doc(id).update({status: status}); }
+        function del(id) { if(confirm("Remove?")) db.collection("parking_staff_requests").doc(id).delete(); }
+    </script>
+</body>
+</html>
+
