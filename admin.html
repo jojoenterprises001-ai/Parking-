@@ -3,25 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Super Admin</title>
+    <title>Super Admin Panel</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <style>
         body { font-family: Arial; background: #ecf0f1; padding: 20px; }
-        .card { background: white; padding: 20px; border-radius: 8px; margin-top: 20px; }
-        table { width: 100%; border-collapse: collapse; } th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; }
-        button { padding: 5px 10px; cursor: pointer; color: white; border: none; border-radius: 4px; }
-        .btn-app { background: green; } .btn-rej { background: red; }
+        .card { background: white; padding: 20px; border-radius: 8px; margin-top: 20px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; } 
+        th, td { padding: 12px; border-bottom: 1px solid #ddd; text-align: left; }
+        th { background: #34495e; color: white; }
+        button { padding: 6px 12px; cursor: pointer; color: white; border: none; border-radius: 4px; font-weight: bold; }
+        .btn-app { background: #27ae60; } .btn-rej { background: #e74c3c; }
+        .stats-box { display: flex; gap: 15px; margin-bottom: 20px; }
+        .stat-card { flex: 1; background: white; padding: 15px; border-radius: 8px; text-align: center; box-shadow: 0 0 5px rgba(0,0,0,0.1); }
+        .stat-card h3 { margin: 0; color: #7f8c8d; font-size: 14px; }
+        .stat-card p { margin: 10px 0 0 0; font-size: 24px; font-weight: bold; color: #2c3e50; }
     </style>
 </head>
 <body>
-    <h2>Super Admin Dashboard <button class="btn-rej" onclick="auth.signOut().then(()=>window.location.href='index.html')">Logout</button></h2>
+    <div style="display: flex; justify-content: space-between; align-items: center; background: #2c3e50; color: white; padding: 15px 20px; border-radius: 8px;">
+        <h2>Super Admin Dashboard</h2>
+        <button class="btn-rej" onclick="auth.signOut().then(()=>window.location.href='index.html')">Logout</button>
+    </div>
+
+    <!-- Live Counters -->
+    <div class="stats-box" style="margin-top: 20px;">
+        <div class="stat-card">
+            <h3>Total Active Vehicles (Parking Mein)</h3>
+            <p id="totalActiveCount">0</p>
+        </div>
+        <div class="stat-card">
+            <h3>Total Staff Requests</h3>
+            <p id="totalStaffCount">0</p>
+        </div>
+    </div>
+
     <div class="card">
         <h3>Staff Approval Requests</h3>
         <table>
-            <thead><tr><th>Name</th><th>Mobile</th><th>Status</th><th>Action</th></tr></thead>
-            <tbody id="staffTable"></tbody>
+            <thead><tr><th>Name</th><th>Mobile</th><th>Email</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody id="staffTable"><tr><td colspan="5">Loading...</td></tr></tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h3>Currently Parked Vehicles (Live List)</h3>
+        <table>
+            <thead><tr><th>Vehicle No</th><th>Type</th><th>Mobile</th></tr></thead>
+            <tbody id="activeVehiclesTable"><tr><td colspan="3">Loading...</td></tr></tbody>
         </table>
     </div>
 
@@ -38,23 +68,40 @@
 
         auth.onAuthStateChanged((user) => {
             if (!user || user.email !== "admin@parking.com") { window.location.href = "index.html"; }
-            else { loadStaff(); }
+            else { loadAdminData(); }
         });
 
-        function loadStaff() {
+        function loadAdminData() {
+            // 1. Load Staff Requests & Count
             db.collection("parking_staff_requests").onSnapshot((snap) => {
                 let html = "";
+                let count = 0;
                 snap.forEach((doc) => {
+                    count++;
                     let d = doc.data();
-                    html += `<tr><td>${d.name}</td><td>${d.mobile}</td><td>${d.status}</td>
+                    html += `<tr><td>${d.name}</td><td>${d.mobile}</td><td>${d.email}</td><td>${d.status}</td>
                     <td>${d.status === 'Pending' ? `<button class="btn-app" onclick="upd('${doc.id}', 'Approved')">Approve</button>` : `<button class="btn-rej" onclick="del('${doc.id}')">Remove</button>`}</td></tr>`;
                 });
-                document.getElementById('staffTable').innerHTML = html;
+                document.getElementById('staffTable').innerHTML = html || "<tr><td colspan='5'>Koi request nahi hai.</td></tr>";
+                document.getElementById('totalStaffCount').innerText = count;
+            });
+
+            // 2. Load Active Vehicles & Count (Bina manager.html badle live count)
+            db.collection("parking_active_vehicles").onSnapshot((snap) => {
+                let html = "";
+                let count = 0;
+                snap.forEach((doc) => {
+                    count++;
+                    let d = doc.data();
+                    html += `<tr><td><strong>${d.vNo}</strong></td><td>${d.type}</td><td>${d.mobile}</td></tr>`;
+                });
+                document.getElementById('activeVehiclesTable').innerHTML = html || "<tr><td colspan='3'>Abhi parking mein koi gaadi nahi hai.</td></tr>";
+                document.getElementById('totalActiveCount').innerText = count;
             });
         }
+
         function upd(id, status) { db.collection("parking_staff_requests").doc(id).update({status: status}); }
         function del(id) { if(confirm("Remove?")) db.collection("parking_staff_requests").doc(id).delete(); }
     </script>
 </body>
 </html>
-
